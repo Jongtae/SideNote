@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>한줄구독 — 친구의 한 줄이 홈 화면에 도착해요</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: #F8F3EA;
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    color: #2D241F;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #C9B8A8; border-radius: 3px; }
+
+  @media (max-width: 768px) {
+    .hero-section {
+      flex-direction: column !important;
+      padding: 90px 24px 48px !important;
+      min-height: unset !important;
+      gap: 40px !important;
+    }
+    .hero-phones {
+      flex-direction: row !important;
+      justify-content: center !important;
+      gap: 16px !important;
+      width: 100% !important;
+      overflow: hidden !important;
+    }
+    .hero-phone-secondary { display: none !important; }
+    .two-col-grid {
+      grid-template-columns: 1fr !important;
+      gap: 24px !important;
+    }
+    .features-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .section-pad {
+      padding: 64px 24px !important;
+    }
+    .nav-links { display: none !important; }
+    .nav-inner { padding: 0 20px !important; }
+    .chars-grid {
+      grid-template-columns: repeat(3, 1fr) !important;
+    }
+    .ticker-track { animation-duration: 20s !important; }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes floatA {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-12px); }
+  }
+  @keyframes floatB {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-8px); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.6; }
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes ticker {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .fade-up { animation: fadeUp 0.7s ease forwards; }
+  .float-a { animation: floatA 4s ease-in-out infinite; }
+  .float-b { animation: floatB 5s ease-in-out infinite; animation-delay: 0.5s; }
+
+  .section-enter { opacity: 1; transform: translateY(0); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .section-enter.hidden { opacity: 0; transform: translateY(40px); }
+  .section-enter.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel">
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "#F28C78",
+  "bgColor": "#F8F3EA",
+  "darkMode": false,
+  "showWidget": true
+}/*EDITMODE-END*/;
+
+// ── Tokens ────────────────────────────────────────────────────
+const C = {
+  bg: '#F8F3EA',
+  bgDeep: '#EFE AE2',
+  card: '#FFF9F2',
+  coral: '#F28C78',
+  coralLight: '#F6DDD3',
+  dark: '#2D241F',
+  muted: '#7D6D62',
+  border: '#E2D3C6',
+  soft: '#EFE AE2',
+};
+
+// ── Utility ───────────────────────────────────────────────────
+function useIntersection(ref) {
+  const [visible, setVisible] = React.useState(false);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Check if already in viewport on mount
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight) { setVisible(true); return; }
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setVisible(true); obs.disconnect(); }
+    }, { threshold: 0.08, rootMargin: '0px 0px 60px 0px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return visible;
+}
+
+function Section({ children, delay = 0, style = {} }) {
+  const ref = React.useRef(null);
+  const visible = useIntersection(ref);
+  return (
+    <div ref={ref} className={`section-enter ${visible ? 'visible' : 'hidden'}`} style={{
+      transitionDelay: `${delay}ms`,
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// ── Quote Card (app style) ────────────────────────────────────
+function QuoteCard({ quote, from, channel = 'from', time = '방금', style = {} }) {
+  return (
+    <div style={{
+      background: '#FFF9F2',
+      borderRadius: 28,
+      padding: '22px 24px',
+      boxShadow: '0 10px 28px rgba(45,36,31,0.09)',
+      ...style,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F28C78' }} />
+        <span style={{ fontWeight: 700, fontSize: 12, color: '#7D6D62', letterSpacing: '0.08em' }}>
+          {channel} {from}
+        </span>
+      </div>
+      <p style={{ fontWeight: 700, fontSize: 22, lineHeight: 1.4, color: '#2D241F', textWrap: 'pretty', marginBottom: 14 }}>
+        {quote}
+      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: '#C9B8A8' }}>SideNote Widget</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#C9B8A8' }}>{time}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Widget Mockup ─────────────────────────────────────────────
+function WidgetMockup({ quote, from, style = {} }) {
+  return (
+    <div style={{
+      width: 329, height: 145,
+      background: '#FFF9F2',
+      borderRadius: 28,
+      padding: '18px 20px',
+      boxShadow: '0 10px 28px rgba(153,111,86,0.14)',
+      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+      ...style,
+    }}>
+      <p style={{ fontWeight: 700, fontSize: 20, lineHeight: 1.4, color: '#2D241F' }}>{quote}</p>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#F28C78', marginBottom: 2 }}>from {from}</div>
+        <div style={{ fontSize: 11, color: '#7D6D62' }}>SideNote Widget</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Navbar ────────────────────────────────────────────────────
+function Navbar() {
+  const [scrolled, setScrolled] = React.useState(false);
+  React.useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', fn);
+    return () => window.removeEventListener('scroll', fn);
+  }, []);
+  return (
+    <nav style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 40px', height: 64,
+      background: scrolled ? 'rgba(248,243,234,0.88)' : 'transparent',
+      backdropFilter: scrolled ? 'blur(12px)' : 'none',
+      borderBottom: scrolled ? '1px solid rgba(226,211,198,0.5)' : 'none',
+      transition: 'all 0.3s ease',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 10,
+          background: '#F28C78',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span style={{ color: '#fff', fontWeight: 800, fontSize: 16, lineHeight: 1 }}>一</span>
+        </div>
+        <span style={{ fontWeight: 700, fontSize: 16, color: '#2D241F' }}>한줄구독</span>
+      </div>
+      <div className="nav-links" style={{ display: 'flex', gap: 8 }}>
+        <a href="#features" style={{
+          padding: '8px 16px', borderRadius: 12,
+          fontSize: 14, fontWeight: 600, color: '#7D6D62',
+          textDecoration: 'none',
+          transition: 'color 0.2s',
+        }}>기능</a>
+        <a href="#widget" style={{
+          padding: '8px 16px', borderRadius: 12,
+          fontSize: 14, fontWeight: 600, color: '#7D6D62',
+          textDecoration: 'none',
+        }}>위젯</a>
+        <a href="#download" style={{
+          padding: '8px 18px', borderRadius: 14, height: 36,
+          display: 'flex', alignItems: 'center',
+          background: '#2D241F', color: '#FFF9F2',
+          fontSize: 14, fontWeight: 700,
+          textDecoration: 'none',
+          transition: 'transform 0.15s, box-shadow 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(45,36,31,0.18)'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+        >앱 받기</a>
+      </div>
+    </nav>
+  );
+}
+
+// ── Ticker ────────────────────────────────────────────────────
+const tickerQuotes = [
+  '계획이 무너진 게 아니라, 원래 그랬다.',
+  '오늘 하루도 기적적으로 버텼음',
+  '퇴근했더니 집이 나를 먼저 보고 싶어함',
+  '아무것도 안 했는데 피곤한 날',
+  '커피가 없었으면 어쩔 뻔',
+  '오늘의 나: 최선을 다한 문어',
+  '그냥 다 웃긴 하루였음',
+  '밥은 먹었고, 나머지는 넘어가도 됨',
+];
+
+function Ticker() {
+  const items = [...tickerQuotes, ...tickerQuotes];
+  return (
+    <div style={{ overflow: 'hidden', padding: '16px 0', borderTop: '1px solid #E2D3C6', borderBottom: '1px solid #E2D3C6' }}>
+      <div style={{ display: 'flex', gap: 48, animation: 'ticker 30s linear infinite', width: 'max-content' }}>
+        {items.map((q, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, whiteSpace: 'nowrap' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#F28C78', flexShrink: 0 }} />
+            <span style={{ fontSize: 15, fontWeight: 600, color: '#7D6D62' }}>{q}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Simple Phone Shell (no status bar, no island) ────────────
+function PhoneShell({ children, width = 300, height = 650 }) {
+  const scale = width / 393;
+  return (
+    <div style={{
+      width, height,
+      borderRadius: 36 * scale,
+      overflow: 'hidden',
+      background: '#F8F3EA',
+      border: '1px solid rgb(226,211,198)',
+      boxShadow: '0 10px 24px rgba(120,84,56,0.12)',
+      position: 'relative',
+      flexShrink: 0,
+    }}>
+      <div style={{
+        width: 393, height: Math.round(height / scale),
+        transform: `scale(${scale})`,
+        transformOrigin: 'top left',
+        position: 'absolute', top: 0, left: 0,
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Screen 1: Home / Today ────────────────────────────────────
+function ScreenHome() {
+  const [activeCard, setActiveCard] = React.useState(0);
+  const cards = [
+    { quote: '큰 포부 보다 작은 생존이 먼저다.', from: '생활 생존자 · 애벌레' },
+    { quote: '오늘도 somehow 버티는 중', from: '자조 + 현실주의' },
+    { quote: '오늘은 조금 느려도 괜찮아.', from: '낭만주의자 · 렘' },
+  ];
+  React.useEffect(() => {
+    const t = setInterval(() => setActiveCard(a => (a + 1) % cards.length), 2800);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div style={{ background: '#F8F3EA', width: 393, minHeight: '100%', padding: '50px 24px 32px' }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#7D6D62', marginBottom: 14 }}>한줄구독 - SideNote</div>
+      <div style={{ fontWeight: 700, fontSize: 32, lineHeight: '42px', color: '#2D241F', marginBottom: 52 }}>오늘은 누가 뭐라고<br />했지?</div>
+
+      {/* Animated hero card */}
+      <div style={{ position: 'relative', height: 224, marginBottom: 20 }}>
+        {cards.map((c, i) => (
+          <div key={i} style={{
+            position: 'absolute', inset: 0,
+            opacity: activeCard === i ? 1 : 0,
+            transform: activeCard === i ? 'translateY(0)' : 'translateY(6px)',
+            transition: 'opacity 0.5s ease, transform 0.5s ease',
+          }}>
+            <div style={{
+              background: '#FFF9F2', borderRadius: 32, padding: '28px 24px',
+              height: '100%', boxShadow: '0 10px 24px rgba(120,84,56,0.08)',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#F28C78', marginBottom: 10 }}>from {c.from}</div>
+              <p style={{ fontWeight: 700, fontSize: 28, lineHeight: '36px', color: '#2D241F', marginBottom: 0 }}>{c.quote}</p>
+              <div style={{ position: 'absolute', bottom: 20, right: 24, fontSize: 13, color: '#C9B8A8', fontWeight: 500 }}>SideNote</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Dot indicators */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+        {cards.map((_, i) => (
+          <div key={i} style={{ width: activeCard === i ? 16 : 6, height: 6, borderRadius: 3, background: activeCard === i ? '#F28C78' : '#C9B8A8', transition: 'all 0.3s' }} />
+        ))}
+      </div>
+
+      {/* Timer */}
+      <div style={{ fontSize: 13, color: '#7D6D62', marginBottom: 20, fontWeight: 500 }}>다음 변경까지 12:48</div>
+
+      {/* Buttons */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
+        <div style={{ background: '#F28C78', borderRadius: 28, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ color: '#fff', fontWeight: 700, fontSize: 18 }}>한 줄 쓰기</span>
+        </div>
+        <div style={{ background: '#FFF9F2', borderRadius: 28, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(201,184,168,0.35)' }}>
+          <span style={{ color: '#2D241F', fontWeight: 700, fontSize: 18 }}>내가 보는 사람들</span>
+        </div>
+      </div>
+
+      {/* Today's people */}
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#2D241F', marginBottom: 12 }}>오늘 보이는 사람들</div>
+      <div style={{ background: '#FFF9F2', borderRadius: 28, padding: '18px 20px', boxShadow: '0 10px 24px rgba(120,84,56,0.08)' }}>
+        <div style={{ fontWeight: 700, fontSize: 18, color: '#2D241F', marginBottom: 4 }}>고양이</div>
+        <div style={{ fontSize: 15, color: '#7D6D62' }}>시니컬 + 무심 + 약한 애정</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Screen 2: Subscriptions ───────────────────────────────────
+function ScreenSubscriptions() {
+  const chars = [
+    { initial: '애', name: '애벌레', tone: '자조 + 현실주의 + 밈' },
+    { initial: '고', name: '고양이', tone: '무심 + 냉소 + 약한 애정' },
+    { initial: '햄', name: '햄스터', tone: '귀여움 + 응원' },
+    { initial: '문', name: '문어', tone: '철학 + 비유' },
+    { initial: '과', name: '생활 생존자', tone: '짠내 + 현실 생존' },
+  ];
+  return (
+    <div style={{ background: '#F8F3EA', width: 393, minHeight: '100%', padding: '50px 24px 32px' }}>
+      <div style={{ fontWeight: 700, fontSize: 32, lineHeight: '42px', color: '#2D241F', marginBottom: 12 }}>
+        내가 구독하는 건<br />사람보다<br />그 사람의 반응
+      </div>
+      <div style={{ fontSize: 15, color: '#7D6D62', lineHeight: '22px', marginBottom: 36 }}>문장력보다 리액션 스타일이 먼저 읽혀야 한다.</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {chars.map(({ initial, name, tone }, i) => (
+          <div key={name} style={{
+            background: i === 0 ? '#F6DDD3' : '#FFF9F2',
+            borderRadius: 24, padding: '18px 20px',
+            display: 'flex', alignItems: 'center', gap: 16,
+            border: i === 0 ? '1.5px solid rgba(242,140,120,0.4)' : '1px solid rgba(201,184,168,0.2)',
+            boxShadow: '0 4px 12px rgba(120,84,56,0.06)',
+          }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 14,
+              background: i === 0 ? '#F28C78' : '#E8DDD5',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 700, fontSize: 15, color: i === 0 ? '#fff' : '#7D6D62',
+              flexShrink: 0,
+            }}>{initial}</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17, color: '#2D241F', marginBottom: 2 }}>{name}</div>
+              <div style={{ fontSize: 13, color: '#7D6D62' }}>{tone}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Screen 3: Compose ─────────────────────────────────────────
+function ScreenCompose() {
+  return (
+    <div style={{ background: '#F8F3EA', width: 393, minHeight: '100%', padding: '24px 24px 32px' }}>
+      {/* Top chips */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 56 }}>
+        <div style={{ background: '#FFF9F2', borderRadius: 30, width: 84, height: 54, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontWeight: 700, fontSize: 18, color: '#2D241F' }}>닫기</span>
+        </div>
+        <div style={{ background: '#FFF9F2', borderRadius: 30, width: 84, height: 54, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontWeight: 700, fontSize: 18, color: '#F28C78' }}>저장</span>
+        </div>
+      </div>
+
+      <div style={{ fontWeight: 700, fontSize: 32, lineHeight: '42px', color: '#2D241F', marginBottom: 14 }}>
+        지금 기분을<br />제일 그럴듯하게<br />받아적기
+      </div>
+      <div style={{ fontSize: 15, color: '#7D6D62', lineHeight: '22px', marginBottom: 28 }}>
+        좋은 글을 쓰는 곳이 아니라, 오늘 버티는 반응을 만드는 곳.
+      </div>
+
+      {/* Input card */}
+      <div style={{
+        background: '#FFF9F2', borderRadius: 30, padding: '24px 22px',
+        boxShadow: '0 10px 24px rgba(120,84,56,0.08)', marginBottom: 20,
+        minHeight: 120,
+      }}>
+        <div style={{ fontSize: 30, lineHeight: '38px', color: '#7D6D62' }}>
+          오늘도 somehow<br />버티는 중
+        </div>
+      </div>
+
+      {/* Meta */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#F28C78', marginBottom: 2 }}>생활 생존자</div>
+          <div style={{ fontSize: 12, color: '#7D6D62' }}>자조 + 현실주의</div>
+        </div>
+        <div style={{ fontSize: 13, color: '#C9B8A8' }}>0 / 40</div>
+      </div>
+      <div style={{ fontSize: 13, color: '#7D6D62' }}>짧을수록 홈 화면에서 더 잘 보여요</div>
+    </div>
+  );
+}
+
+// ── Characters ────────────────────────────────────────────────
+const characters = [
+  { emoji: '🌵', name: '선인장', desc: '말 없이 존재하는 타입', color: '#D4EDDA', textColor: '#1A5C2A' },
+  { emoji: '🐱', name: '고양이', desc: '시니컬 + 무심 + 핵인싸', color: '#E8E0F0', textColor: '#4A2D7A' },
+  { emoji: '🐙', name: '문어', desc: '동시에 다 잘하는 척', color: '#D6EAF8', textColor: '#1A4F72' },
+  { emoji: '🧗', name: '생활 생존자', desc: '하루하루 버티는 중', color: '#FEF9E7', textColor: '#6B4C00' },
+  { emoji: '💻', name: '과몰입 개발자', desc: '코드와 함께 사는 사람', color: '#EBF5FB', textColor: '#1B4F72' },
+  { emoji: '👁', name: '관찰자', desc: '말은 없지만 다 봄', color: '#F4ECF7', textColor: '#6C3483' },
+  { emoji: '🌙', name: '낭만주의자', desc: '감성 과부하 상태', color: '#FDEBD0', textColor: '#784212' },
+];
+
+// ── Main App ──────────────────────────────────────────────────
+function App() {
+  const [tweaksVisible, setTweaksVisible] = React.useState(false);
+  const [tweaks, setTweaks] = React.useState(TWEAK_DEFAULTS);
+
+  React.useEffect(() => {
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === '__activate_edit_mode') setTweaksVisible(true);
+      if (e.data?.type === '__deactivate_edit_mode') setTweaksVisible(false);
+    });
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+  }, []);
+
+  const setTweak = (key, val) => {
+    const next = { ...tweaks, [key]: val };
+    setTweaks(next);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: next }, '*');
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: tweaks.bgColor }}>
+      <Navbar />
+
+      {/* ─── HERO ─────────────────────────────────────────── */}
+      <section className="hero-section" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', padding: '100px 40px 60px', maxWidth: 1200, margin: '0 auto', gap: 60 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="fade-up" style={{ animationDelay: '0ms' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: '#F6DDD3', borderRadius: 100, padding: '6px 14px',
+              fontSize: 13, fontWeight: 700, color: '#F28C78',
+              marginBottom: 28,
+            }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#F28C78', animation: 'pulse 2s ease infinite' }} />
+              한줄구독 · SideNote
+            </div>
+          </div>
+          <h1 className="fade-up" style={{ animationDelay: '80ms', fontWeight: 800, fontSize: 'clamp(40px, 6vw, 72px)', lineHeight: 1.15, color: '#2D241F', marginBottom: 24, textWrap: 'pretty' }}>
+            친구의 한 줄이<br />
+            <span style={{ color: tweaks.accentColor }}>홈 화면에</span><br />
+            도착해요
+          </h1>
+          <p className="fade-up" style={{ animationDelay: '160ms', fontSize: 'clamp(16px, 2vw, 20px)', color: '#7D6D62', lineHeight: 1.7, marginBottom: 40, maxWidth: 480 }}>
+            길게 쓰지 않아도 괜찮아요. 오늘의 기분을 닉네임과 한 줄로 남기면, 친구의 위젯에 조용히 도착해요.
+          </p>
+          <div className="fade-up" style={{ animationDelay: '240ms', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <a href="#download" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              background: '#2D241F', color: '#FFF9F2',
+              padding: '14px 28px', borderRadius: 18,
+              fontSize: 16, fontWeight: 700, textDecoration: 'none',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(45,36,31,0.2)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+              App Store
+            </a>
+            <a href="#features" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: '#FFF9F2', color: '#2D241F',
+              padding: '14px 24px', borderRadius: 18,
+              fontSize: 16, fontWeight: 700, textDecoration: 'none',
+              border: '1px solid rgba(201,184,168,0.4)',
+              transition: 'transform 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
+            onMouseLeave={e => e.currentTarget.style.transform = ''}
+            >
+              더 알아보기 →
+            </a>
+          </div>
+        </div>
+
+        {/* Phone mockups — Working Screens v2 */}
+        <div className="hero-phones fade-up" style={{ animationDelay: '320ms', flexShrink: 0, display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+          <div className="float-a" style={{ marginTop: 0 }}>
+            <PhoneShell width={260} height={562}>
+              <ScreenHome />
+            </PhoneShell>
+          </div>
+          <div className="hero-phone-secondary float-b" style={{ marginTop: 60, display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <PhoneShell width={220} height={360}>
+              <ScreenCompose />
+            </PhoneShell>
+            <WidgetMockup
+              quote="오늘은 조금 느려도 괜찮아."
+              from="낭만주의자 · 렘"
+              style={{ width: 220, height: 120 }}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ─── TICKER ───────────────────────────────────────── */}
+      <Ticker />
+
+      {/* ─── FEATURES ─────────────────────────────────────── */}
+      <section id="features" className="section-pad" style={{ maxWidth: 1200, margin: '0 auto', padding: '100px 40px' }}>
+        <Section>
+          <div style={{ textAlign: 'center', marginBottom: 64 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#F28C78', letterSpacing: '0.08em', marginBottom: 14 }}>HOW IT WORKS</div>
+            <h2 style={{ fontWeight: 800, fontSize: 'clamp(32px, 5vw, 52px)', color: '#2D241F', lineHeight: 1.2 }}>
+              짧을수록<br />더 잘 보여요
+            </h2>
+          </div>
+        </Section>
+
+        <div className="features-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
+          {[
+            {
+              step: '01',
+              title: '닉네임 고르기',
+              desc: '오늘의 나를 표현하는 캐릭터 닉네임을 선택해요. 방전된 애벌레, 조용히 예민한 고양이 같은 말투가 콘텐츠가 돼요.',
+              preview: (
+                <div style={{ background: '#F8F3EA', borderRadius: 16, overflow: 'hidden' }}>
+                  <PhoneShell width={280} height={380}>
+                    <ScreenHome />
+                  </PhoneShell>
+                </div>
+              ),
+              delay: 0,
+            },
+            {
+              step: '02',
+              title: '한 줄 남기기',
+              desc: '40자 이내로 오늘의 상태를 남겨요. 좋은 글 필요 없어요. 그냥 지금 머릿속에 있는 것을 쓰면 돼요.',
+              preview: (
+                <PhoneShell width={280} height={340}>
+                  <ScreenCompose />
+                </PhoneShell>
+              ),
+              delay: 100,
+            },
+            {
+              step: '03',
+              title: '위젯으로 도착',
+              desc: '친구의 홈 화면에 당신의 한 줄이 조용히 도착해요. 좋아요 숫자 없이, 그냥 그 사람의 말투로.',
+              preview: (
+                <WidgetMockup
+                  quote="계획이 무너진 게 아니라, 원래 그랬다."
+                  from="방전된 애벌레"
+                  style={{ width: '100%' }}
+                />
+              ),
+              delay: 200,
+            },
+          ].map(({ step, title, desc, preview, delay }) => (
+            <Section key={step} delay={delay}>
+              <div style={{
+                background: '#FFF9F2', borderRadius: 28, padding: 32,
+                boxShadow: '0 4px 20px rgba(45,36,31,0.06)',
+                border: '1px solid rgba(226,211,198,0.4)',
+                height: '100%',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(45,36,31,0.1)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+              >
+                <div style={{ fontWeight: 800, fontSize: 12, color: '#F28C78', letterSpacing: '0.1em', marginBottom: 12 }}>{step}</div>
+                <h3 style={{ fontWeight: 800, fontSize: 24, color: '#2D241F', marginBottom: 12 }}>{title}</h3>
+                <p style={{ fontSize: 15, color: '#7D6D62', lineHeight: 1.7, marginBottom: 24 }}>{desc}</p>
+                <div style={{ background: '#F8F3EA', borderRadius: 20, padding: 20 }}>{preview}</div>
+              </div>
+            </Section>
+          ))}
+        </div>
+      </section>
+
+      {/* ─── WIDGET SECTION ───────────────────────────────── */}
+      <section id="widget" style={{ background: '#2D241F', padding: '100px 40px' }}>
+        <div className="two-col-grid" style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'center' }}>
+          <Section>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#F28C78', letterSpacing: '0.08em', marginBottom: 16 }}>WIDGET FIRST</div>
+            <h2 style={{ fontWeight: 800, fontSize: 'clamp(32px, 5vw, 52px)', color: '#FFF9F2', lineHeight: 1.2, marginBottom: 24 }}>
+              앱을 열지 않아도<br />
+              <span style={{ color: '#F28C78' }}>친구가 보여요</span>
+            </h2>
+            <p style={{ fontSize: 17, color: 'rgba(255,249,242,0.65)', lineHeight: 1.7, marginBottom: 40 }}>
+              홈 화면에서 직접 확인하는 위젯 퍼스트 경험. 친구의 한 줄이 앱 없이도 조용히 도착해요.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {[
+                { icon: '◼', label: '위젯에서 바로 확인', desc: '앱을 열지 않고도 최신 한 줄 확인' },
+                { icon: '◼', label: '자동 갱신', desc: '친구가 새 글을 쓰면 위젯이 업데이트' },
+                { icon: '◼', label: '익명 피드', desc: '누구의 글인지 먼저 추측하는 재미' },
+              ].map(({ icon, label, desc }) => (
+                <div key={label} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(242,140,120,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: '#F28C78' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#FFF9F2', marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 13, color: 'rgba(255,249,242,0.5)' }}>{desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+          <Section delay={150}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {[
+                { quote: '계획이 무너진 게 아니라, 원래 그랬다.', from: '방전된 애벌레' },
+                { quote: '오늘 하루도 기적적으로 버텼음', from: '조용한 고양이' },
+                { quote: '커피가 없었으면 어쩔 뻔', from: '과몰입 개발자' },
+                { quote: '아무것도 안 했는데 피곤한 날', from: '생활 생존자' },
+              ].map(({ quote, from }, i) => (
+                <div key={i} style={{
+                  background: '#FFF9F2', borderRadius: 20,
+                  padding: '18px 16px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                  transform: i % 2 === 1 ? 'translateY(20px)' : 'none',
+                }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, color: '#2D241F', lineHeight: 1.45, marginBottom: 12 }}>{quote}</p>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#F28C78' }}>from {from}</div>
+                  <div style={{ fontSize: 10, color: '#C9B8A8', marginTop: 2 }}>SideNote Widget</div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+      </section>
+
+      {/* ─── GUESS GAME ───────────────────────────────────── */}
+      <section className="section-pad" style={{ maxWidth: 1200, margin: '0 auto', padding: '100px 40px' }}>
+        <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'center' }}>
+          <Section>
+            <PhoneShell width={300} height={580}>
+              <ScreenSubscriptions />
+            </PhoneShell>
+          </Section>
+          <Section delay={100}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#F28C78', letterSpacing: '0.08em', marginBottom: 16 }}>GUESS GAME</div>
+            <h2 style={{ fontWeight: 800, fontSize: 'clamp(32px, 5vw, 52px)', color: '#2D241F', lineHeight: 1.2, marginBottom: 24 }}>
+              이거 완전<br />
+              <span style={{ color: '#F28C78' }}>너 같다</span>
+            </h2>
+            <p style={{ fontSize: 17, color: '#7D6D62', lineHeight: 1.7, marginBottom: 24 }}>
+              익명으로 올라온 한 줄을 보고, 누가 썼는지 한 번만 추측할 수 있어요. 맞추면 기분 좋고, 틀려도 웃겨요.
+            </p>
+            <p style={{ fontSize: 17, color: '#7D6D62', lineHeight: 1.7 }}>
+              점수 경쟁 없이, 관계형 가벼운 반응. 캐릭터와 말투가 콘텐츠가 돼요.
+            </p>
+          </Section>
+        </div>
+      </section>
+
+      {/* ─── CHARACTERS ───────────────────────────────────── */}
+      <section className="section-pad" style={{ background: '#EFE AE2', padding: '100px 40px', background: '#F6DDD3' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <Section>
+            <div style={{ textAlign: 'center', marginBottom: 56 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#F28C78', letterSpacing: '0.08em', marginBottom: 14 }}>CHARACTERS</div>
+              <h2 style={{ fontWeight: 800, fontSize: 'clamp(32px, 5vw, 52px)', color: '#2D241F', lineHeight: 1.2 }}>
+                오늘의 나는<br />어떤 캐릭터?
+              </h2>
+            </div>
+          </Section>
+          <div className="chars-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 16 }}>
+            {characters.map(({ emoji, name, desc, color, textColor }, i) => (
+              <Section key={name} delay={i * 60}>
+                <div style={{
+                  background: '#FFF9F2', borderRadius: 24, padding: '22px 16px',
+                  textAlign: 'center',
+                  boxShadow: '0 4px 16px rgba(45,36,31,0.07)',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  cursor: 'default',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = '0 12px 28px rgba(45,36,31,0.12)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+                >
+                  <div style={{ fontSize: 36, marginBottom: 10 }}>{emoji}</div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: '#2D241F', marginBottom: 6 }}>{name}</div>
+                  <div style={{ fontSize: 11, color: '#7D6D62', lineHeight: 1.5 }}>{desc}</div>
+                </div>
+              </Section>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── CTA ──────────────────────────────────────────── */}
+      <section id="download" style={{ padding: '120px 40px', textAlign: 'center', maxWidth: 720, margin: '0 auto' }}>
+        <Section>
+          <div style={{ fontSize: 80, marginBottom: 24, lineHeight: 1 }}>一</div>
+          <h2 style={{ fontWeight: 800, fontSize: 'clamp(36px, 6vw, 64px)', color: '#2D241F', lineHeight: 1.2, marginBottom: 20 }}>
+            오늘의 한 줄을<br />남겨볼까요
+          </h2>
+          <p style={{ fontSize: 18, color: '#7D6D62', lineHeight: 1.7, marginBottom: 48, maxWidth: 480, margin: '0 auto 48px' }}>
+            짧을수록 좋아요. 굳이 잘 쓰지 않아도 괜찮아요.
+          </p>
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href="#" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 12,
+              background: '#2D241F', color: '#FFF9F2',
+              padding: '16px 36px', borderRadius: 20,
+              fontSize: 17, fontWeight: 700, textDecoration: 'none',
+              boxShadow: '0 8px 28px rgba(45,36,31,0.2)',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 16px 40px rgba(45,36,31,0.25)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+              App Store에서 받기
+            </a>
+          </div>
+          <div style={{ marginTop: 24, fontSize: 13, color: '#C9B8A8' }}>iOS 16.0 이상 · 무료</div>
+        </Section>
+      </section>
+
+      {/* ─── FOOTER ───────────────────────────────────────── */}
+      <footer style={{ borderTop: '1px solid rgba(226,211,198,0.6)', padding: '40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: '#F28C78', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ color: '#fff', fontWeight: 800, fontSize: 14 }}>一</span>
+          </div>
+          <span style={{ fontWeight: 700, fontSize: 14, color: '#2D241F' }}>한줄구독</span>
+          <span style={{ fontSize: 12, color: '#C9B8A8', marginLeft: 8 }}>SideNote</span>
+        </div>
+        <div style={{ fontSize: 12, color: '#C9B8A8' }}>© 2026 SideNote. All rights reserved.</div>
+      </footer>
+
+      {/* ─── TWEAKS PANEL ─────────────────────────────────── */}
+      {tweaksVisible && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          background: '#FFF9F2', borderRadius: 20, padding: 24,
+          boxShadow: '0 16px 48px rgba(45,36,31,0.18)',
+          width: 260, border: '1px solid rgba(226,211,198,0.6)',
+        }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: '#2D241F', marginBottom: 20 }}>Tweaks</div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#7D6D62', marginBottom: 8 }}>Accent Color</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['#F28C78', '#7BB8C4', '#8FA87D', '#C49BC4'].map(c => (
+                <div key={c} onClick={() => setTweak('accentColor', c)} style={{
+                  width: 28, height: 28, borderRadius: '50%', background: c, cursor: 'pointer',
+                  border: tweaks.accentColor === c ? '3px solid #2D241F' : '3px solid transparent',
+                  transition: 'transform 0.15s',
+                }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'} onMouseLeave={e => e.currentTarget.style.transform = ''} />
+              ))}
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#7D6D62', marginBottom: 8 }}>Background</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['#F8F3EA', '#F0EDE8', '#EAF0F0', '#F5F0F8'].map(c => (
+                <div key={c} onClick={() => setTweak('bgColor', c)} style={{
+                  width: 28, height: 28, borderRadius: '50%', background: c, cursor: 'pointer',
+                  border: `3px solid ${tweaks.bgColor === c ? '#2D241F' : 'rgba(201,184,168,0.4)'}`,
+                }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
