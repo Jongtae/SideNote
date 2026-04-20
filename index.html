@@ -587,10 +587,31 @@ function App() {
               title: '닉네임 고르기',
               desc: '오늘의 나를 표현하는 캐릭터 닉네임을 선택해요. 방전된 애벌레, 조용히 예민한 고양이 같은 말투가 콘텐츠가 돼요.',
               preview: (
-                <div style={{ background: '#F8F3EA', borderRadius: 16, overflow: 'hidden' }}>
-                  <PhoneShell width={280} height={380}>
-                    <ScreenHome />
-                  </PhoneShell>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                    { initial: '애', name: '방전된 애벌레', tone: '자조 + 현실주의', active: true },
+                    { initial: '고', name: '조용히 예민한 고양이', tone: '무심 + 냉소', active: false },
+                    { initial: '과', name: '과몰입 개발자', tone: '짠내 + 현실 생존', active: false },
+                  ].map(({ initial, name, tone, active }) => (
+                    <div key={name} style={{
+                      background: active ? '#F6DDD3' : '#FFF9F2',
+                      border: active ? '1.5px solid rgba(242,140,120,0.5)' : '1px solid rgba(201,184,168,0.3)',
+                      borderRadius: 18, padding: '12px 14px',
+                      display: 'flex', alignItems: 'center', gap: 12,
+                    }}>
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 11, flexShrink: 0,
+                        background: active ? '#F28C78' : '#E8DDD5',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: 13, color: active ? '#fff' : '#7D6D62',
+                      }}>{initial}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#2D241F' }}>{name}</div>
+                        <div style={{ fontSize: 11, color: '#7D6D62', marginTop: 2 }}>{tone}</div>
+                      </div>
+                      {active && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F28C78', flexShrink: 0 }} />}
+                    </div>
+                  ))}
                 </div>
               ),
               delay: 0,
@@ -600,9 +621,33 @@ function App() {
               title: '한 줄 남기기',
               desc: '40자 이내로 오늘의 상태를 남겨요. 좋은 글 필요 없어요. 그냥 지금 머릿속에 있는 것을 쓰면 돼요.',
               preview: (
-                <PhoneShell width={280} height={340}>
-                  <ScreenCompose />
-                </PhoneShell>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{
+                    background: '#FFF9F2', borderRadius: 20, padding: '16px 18px',
+                    border: '1.5px solid rgba(242,140,120,0.35)',
+                    boxShadow: '0 4px 14px rgba(120,84,56,0.07)',
+                  }}>
+                    <div style={{ fontSize: 22, lineHeight: '32px', color: '#7D6D62', marginBottom: 10 }}>
+                      오늘도 somehow<br />버티는 중
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#F28C78' }}>생활 생존자</div>
+                        <div style={{ fontSize: 11, color: '#7D6D62' }}>자조 + 현실주의</div>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#C9B8A8' }}>18 / 40</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#7D6D62', textAlign: 'center' }}>
+                    짧을수록 홈 화면에서 더 잘 보여요
+                  </div>
+                  <div style={{
+                    background: '#F28C78', borderRadius: 16, height: 46,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>저장하기</span>
+                  </div>
+                </div>
               ),
               delay: 100,
             },
